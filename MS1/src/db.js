@@ -16,7 +16,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
   db.run("PRAGMA foreign_keys = ON;");
 
   db.serialize(() => {
-    // Tabellen anlegen (NEUES ZIEL-Schema)
+
     db.run(`
       CREATE TABLE IF NOT EXISTS authors (
         id   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,7 +41,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
       )
     `);
 
-    // --- MIGRATION: falls 'books' noch alte Spalten hat (author/publisher als TEXT) ---
+  
    db.all("PRAGMA table_info(books);", (e, cols) => {
   if (e) {
     logger.error(`PRAGMA table_info Fehler: ${e.message}`);

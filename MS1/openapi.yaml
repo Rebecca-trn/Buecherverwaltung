@@ -6,19 +6,27 @@ info:
 servers:
   - url: http://localhost:3000
 
+tags:
+  - name: Books
+  - name: Authors
+  - name: Publishers
+
 paths:
+
   # -----------------------------------------------------
   # BOOKS
   # -----------------------------------------------------
   /books:
     get:
+      tags: [Books]
       summary: Alle Bücher abrufen (optional Suche mit ?q=)
       parameters:
         - in: query
           name: q
+          description: Case-insensitive Suche in title/author/publisher
+          required: false
           schema:
             type: string
-          description: Case-insensitive Suche in title/author/publisher
       responses:
         "200":
           description: Liste aller Bücher
@@ -30,8 +38,13 @@ paths:
                   $ref: "#/components/schemas/Book"
         "500":
           description: Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
     post:
+      tags: [Books]
       summary: Neues Buch anlegen
       requestBody:
         required: true
@@ -47,12 +60,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/Book"
         "400":
-          description: Pflichtfelder fehlen
-        "500":
+          description: Pflichtfelder fehlen oder ungültig
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    "500":
           description: Serverfehler
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /books/{id}:
     get:
+      tags: [Books]
       summary: Einzelnes Buch abrufen
       parameters:
         - in: path
@@ -69,11 +94,17 @@ paths:
                 $ref: "#/components/schemas/Book"
         "404":
           description: Buch nicht gefunden
-        "500":
-          description: Serverfehler
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
     patch:
-      summary: Teilupdate eines Buchs
+      tags: [Books]
+      summary: Buch aktualisieren (Teilupdate)
       parameters:
         - in: path
           name: id
@@ -94,13 +125,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/Book"
         "400":
-          description: Keine gültigen Felder
+          description: Keine gültigen Felder übergeben
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Buch nicht gefunden
-        "500":
-          description: Serverfehler
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
     delete:
+      tags: [Books]
       summary: Buch löschen
       parameters:
         - in: path
@@ -113,15 +157,28 @@ paths:
           description: Buch gelöscht
         "404":
           description: Buch nicht gefunden
-        "500":
-          description: Serverfehler
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   # -----------------------------------------------------
   # AUTHORS
   # -----------------------------------------------------
   /authors:
     get:
-      summary: Alle Autoren abrufen
+      tags: [Authors]
+      summary: Alle Autoren abrufen (optional Suche mit ?q=)
+      parameters:
+        - in: query
+          name: q
+          required: false
+          description: Case-insensitive Suche in name
+          schema:
+            type: string
       responses:
         "200":
           description: Liste aller Autoren
@@ -133,6 +190,7 @@ paths:
                   $ref: "#/components/schemas/Author"
 
     post:
+      tags: [Authors]
       summary: Neuen Autor anlegen
       requestBody:
         required: true
@@ -147,9 +205,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Author"
+        "400":
+          description: Ungültige Eingabe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /authors/{id}:
     get:
+      tags: [Authors]
       summary: Einzelnen Autor abrufen
       parameters:
         - in: path
@@ -166,8 +231,16 @@ paths:
                 $ref: "#/components/schemas/Author"
         "404":
           description: Autor nicht gefunden
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
     patch:
+      tags: [Authors]
       summary: Autor ändern
       parameters:
         - in: path
@@ -184,10 +257,31 @@ paths:
       responses:
         "200":
           description: Autor aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Author"
+        "400":
+          description: Ungültiges Patch-Objekt
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Autor nicht gefunden
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
     delete:
+      tags: [Authors]
       summary: Autor löschen
       parameters:
         - in: path
@@ -200,13 +294,28 @@ paths:
           description: Autor gelöscht
         "404":
           description: Autor nicht gefunden
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   # -----------------------------------------------------
   # PUBLISHERS
   # -----------------------------------------------------
   /publishers:
     get:
-      summary: Alle Verlage abrufen
+      tags: [Publishers]
+      summary: Alle Verlage abrufen (optional Suche mit ?q=)
+      parameters:
+        - in: query
+          name: q
+          required: false
+          description: Case-insensitive Suche in name
+          schema:
+            type: string
       responses:
         "200":
           description: Liste aller Verlage
@@ -218,6 +327,7 @@ paths:
                   $ref: "#/components/schemas/Publisher"
 
     post:
+      tags: [Publishers]
       summary: Neuen Verlag anlegen
       requestBody:
         required: true
@@ -232,9 +342,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Publisher"
+        "400":
+          description: Ungültige Eingabe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /publishers/{id}:
     get:
+      tags: [Publishers]
       summary: Einzelnen Verlag abrufen
       parameters:
         - in: path
@@ -251,8 +368,16 @@ paths:
                 $ref: "#/components/schemas/Publisher"
         "404":
           description: Verlag nicht gefunden
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
     patch:
+      tags: [Publishers]
       summary: Verlag ändern
       parameters:
         - in: path
@@ -269,8 +394,31 @@ paths:
       responses:
         "200":
           description: Verlag aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Publisher"
+        "400":
+          description: Ungültiges Patch-Objekt
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Verlag nicht gefunden
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
     delete:
+      tags: [Publishers]
       summary: Verlag löschen
       parameters:
         - in: path
@@ -283,84 +431,95 @@ paths:
           description: Verlag gelöscht
         "404":
           description: Verlag nicht gefunden
+          headers:
+            X-Fehlermeldung:
+              $ref: "#/components/headers/X-Fehlermeldung"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
 # -----------------------------------------------------
-# SCHEMAS
+# COMPONENTS
 # -----------------------------------------------------
 components:
+
+  headers:
+    X-Fehlermeldung:
+      description: Beschreibung der Fehlerursache
+      schema:
+        type: string
+
   schemas:
+
     Book:
       type: object
       properties:
-        id:
-          type: integer
-        title:
-          type: string
-        author:
-          type: string
-        publisher:
-          type: string
+        id: { type: integer }
+        title: { type: string }
+        author: { type: string }
+        publisher: { type: string }
+      required: [id, title, author, publisher]
 
     BookCreate:
       type: object
       properties:
-        title:
-          type: string
-        author:
-          type: string
-        publisher:
-          type: string
+        title: { type: string }
+        author: { type: string }
+        publisher: { type: string }
       required: [title, author, publisher]
 
     BookPatch:
       type: object
+      minProperties: 1
       properties:
-        title:
-          type: string
-        author:
-          type: string
-        publisher:
-          type: string
+        title: { type: string }
+        author: { type: string }
+        publisher: { type: string }
       additionalProperties: false
 
     Author:
       type: object
       properties:
-        id:
-          type: integer
-        name:
-          type: string
+        id: { type: integer }
+        name: { type: string }
+      required: [id, name]
 
     AuthorCreate:
       type: object
       properties:
-        name:
-          type: string
+        name: { type: string }
       required: [name]
 
     AuthorPatch:
       type: object
+      minProperties: 1
       properties:
-        name:
-          type: string
+        name: { type: string }
+      additionalProperties: false
 
     Publisher:
       type: object
       properties:
-        id:
-          type: integer
-        name:
-          type: string
+        id: { type: integer }
+        name: { type: string }
+      required: [id, name]
 
     PublisherCreate:
       type: object
       properties:
-        name:
-          type: string
+        name: { type: string }
       required: [name]
 
     PublisherPatch:
       type: object
+      minProperties: 1
       properties:
-        name:
-          type: string
+        name: { type: string }
+      additionalProperties: false
+
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+      required: [error]

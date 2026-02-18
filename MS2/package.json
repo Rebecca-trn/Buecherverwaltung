@@ -7,6 +7,6 @@
     "start": "node src/index.js"
   },
   "dependencies": {
-    "mqtt": "^4.3.7"
+    "mqtt": "^4.3.8"
   }
 }

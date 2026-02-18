@@ -2,60 +2,107 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 
-// GET /publishers – alle Verlage
+// GET /publishers (mit optionaler Suche ?q=)
 router.get("/", (req, res) => {
-  db.all("SELECT * FROM publishers ORDER BY id", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
+  const { sendError } = req.app.locals;
+  const q = (req.query.q || "").trim();
+
+  if (!q) {
+    db.all("SELECT id, name FROM publishers ORDER BY id", [], (err, rows) => {
+      if (err) return sendError(res, 500, err.message);
+      res.json(rows);
+    });
+  } else {
+    const like = `%${q}%`;
+    db.all(
+      "SELECT id, name FROM publishers WHERE LOWER(name) LIKE LOWER(?) ORDER BY id",
+      [like],
+      (err, rows) => {
+        if (err) return sendError(res, 500, err.message);
+        res.json(rows);
+      }
+    );
+  }
 });
 
-// GET /publishers/:id – einzelner Verlag
+// GET /publishers/:id
 router.get("/:id", (req, res) => {
-  db.get("SELECT * FROM publishers WHERE id = ?", [req.params.id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: "Verlag nicht gefunden" });
-    res.json(row);
-  });
+  const { sendError } = req.app.locals;
+
+  db.get(
+    "SELECT id, name FROM publishers WHERE id = ?",
+    [req.params.id],
+    (err, row) => {
+      if (err) return sendError(res, 500, err.message);
+      if (!row) return sendError(res, 404, "Verlag nicht gefunden");
+      res.json(row);
+    }
+  );
 });
 
-// POST /publishers – neuen Verlag anlegen
+// POST /publishers
 router.post("/", (req, res) => {
+  const { sendError, publishEvent } = req.app.locals;
   const { name } = req.body;
-  if (!name) return res.status(400).json({ error: "name fehlt" });
+  if (!name) return sendError(res, 400, "name fehlt");
 
   db.run("INSERT INTO publishers (name) VALUES (?)", [name], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return sendError(res, 500, err.message);
 
-    db.get("SELECT * FROM publishers WHERE id = ?", [this.lastID], (err2, row) => {
-      if (err2) return res.status(500).json({ error: err2.message });
-      res.status(201).json(row);
-    });
+    db.get(
+      "SELECT id, name FROM publishers WHERE id = ?",
+      [this.lastID],
+      (err2, row) => {
+        if (err2) return sendError(res, 500, err2.message);
+        // EVENT: created
+        publishEvent("publishers", row.id, "created");
+        res.status(201).json(row);
+      }
+    );
   });
 });
 
-// PATCH /publishers/:id – Verlag ändern
+// PATCH /publishers/:id
 router.patch("/:id", (req, res) => {
+  const { sendError, publishEvent } = req.app.locals;
   const { name } = req.body;
-  if (!name) return res.status(400).json({ error: "name fehlt" });
+  if (!name) return sendError(res, 400, "name fehlt");
 
-  db.run("UPDATE publishers SET name = ? WHERE id = ?", [name, req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: "Verlag nicht gefunden" });
+  db.run(
+    "UPDATE publishers SET name = ? WHERE id = ?",
+    [name, req.params.id],
+    function (err) {
+      if (err) return sendError(res, 500, err.message);
+      if (this.changes === 0) return sendError(res, 404, "Verlag nicht gefunden");
 
-    db.get("SELECT * FROM publishers WHERE id = ?", [req.params.id], (err2, row) => {
-      if (err2) return res.status(500).json({ error: err2.message });
-      res.json(row);
-    });
-  });
+      db.get(
+        "SELECT id, name FROM publishers WHERE id = ?",
+        [req.params.id],
+        (err2, row) => {
+          if (err2) return sendError(res, 500, err2.message);
+          // EVENT: updated
+          publishEvent("publishers", row.id, "updated");
+          res.json(row);
+        }
+      );
+    }
+  );
 });
 
-// DELETE /publishers/:id – löschen (nur wenn kein Buch darauf zeigt)
+// DELETE /publishers/:id
 router.delete("/:id", (req, res) => {
-  db.run("DELETE FROM publishers WHERE id = ?", [req.params.id], function (err) {
-    if (err) return res.status(400).json({ error: "Löschen nicht möglich" });
-    if (this.changes === 0) return res.status(404).json({ error: "Verlag nicht gefunden" });
+  const { sendError, publishEvent } = req.app.locals;
 
+  db.run("DELETE FROM publishers WHERE id = ?", [req.params.id], function (err) {
+    if (err) {
+      if (err.message && err.message.includes("FOREIGN KEY"))
+        return sendError(res, 400, "Verlag kann nicht gelöscht werden (noch von Büchern referenziert)");
+      return sendError(res, 500, err.message);
+    }
+    if (this.changes === 0) return sendError(res, 404, "Verlag nicht gefunden");
+
+    // EVENT: deleted
+    publishEvent("publishers", Number(req.params.id), "deleted");
     res.status(204).send();
   });
 });
