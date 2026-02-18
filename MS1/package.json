@@ -1,0 +1,23 @@
+{
+  "name": "verteiltesysteme_abgabe",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node ./src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "mqt": "^1.0.2",
+    "mqtt": "^5.15.0",
+    "sqlite3": "^5.1.7",
+    "swagger-ui-express": "^5.0.1",
+    "yamljs": "^0.3.0"
+  }
+}

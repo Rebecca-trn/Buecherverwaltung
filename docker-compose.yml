@@ -1,0 +1,24 @@
+version: "3"
+
+services:
+  broker:
+    image: eclipse-mosquitto
+    ports:
+      - "1883:1883"
+
+  ms1:
+    build: ./MS1
+    ports:
+      - "3000:3000"
+      - "8080:8080"
+    environment:
+      - MQTT_URL=mqtt://broker:1883
+    depends_on:
+      - broker
+
+  ms2:
+    build: ./MS2
+    environment:
+      - MQTT_URL=mqtt://broker:1883
+    depends_on:
+      - broker

@@ -1,0 +1,366 @@
+openapi: 3.0.3
+info:
+  title: MS1 Books API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000
+
+paths:
+  # -----------------------------------------------------
+  # BOOKS
+  # -----------------------------------------------------
+  /books:
+    get:
+      summary: Alle Bücher abrufen (optional Suche mit ?q=)
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Case-insensitive Suche in title/author/publisher
+      responses:
+        "200":
+          description: Liste aller Bücher
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Book"
+        "500":
+          description: Serverfehler
+
+    post:
+      summary: Neues Buch anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookCreate"
+      responses:
+        "201":
+          description: Angelegtes Buch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "400":
+          description: Pflichtfelder fehlen
+        "500":
+          description: Serverfehler
+
+  /books/{id}:
+    get:
+      summary: Einzelnes Buch abrufen
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Buch gefunden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "404":
+          description: Buch nicht gefunden
+        "500":
+          description: Serverfehler
+
+    patch:
+      summary: Teilupdate eines Buchs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookPatch"
+      responses:
+        "200":
+          description: Buch aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "400":
+          description: Keine gültigen Felder
+        "404":
+          description: Buch nicht gefunden
+        "500":
+          description: Serverfehler
+
+    delete:
+      summary: Buch löschen
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Buch gelöscht
+        "404":
+          description: Buch nicht gefunden
+        "500":
+          description: Serverfehler
+
+  # -----------------------------------------------------
+  # AUTHORS
+  # -----------------------------------------------------
+  /authors:
+    get:
+      summary: Alle Autoren abrufen
+      responses:
+        "200":
+          description: Liste aller Autoren
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Author"
+
+    post:
+      summary: Neuen Autor anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorCreate"
+      responses:
+        "201":
+          description: Autor angelegt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Author"
+
+  /authors/{id}:
+    get:
+      summary: Einzelnen Autor abrufen
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Autor gefunden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Author"
+        "404":
+          description: Autor nicht gefunden
+
+    patch:
+      summary: Autor ändern
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorPatch"
+      responses:
+        "200":
+          description: Autor aktualisiert
+        "404":
+          description: Autor nicht gefunden
+
+    delete:
+      summary: Autor löschen
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Autor gelöscht
+        "404":
+          description: Autor nicht gefunden
+
+  # -----------------------------------------------------
+  # PUBLISHERS
+  # -----------------------------------------------------
+  /publishers:
+    get:
+      summary: Alle Verlage abrufen
+      responses:
+        "200":
+          description: Liste aller Verlage
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Publisher"
+
+    post:
+      summary: Neuen Verlag anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublisherCreate"
+      responses:
+        "201":
+          description: Verlag angelegt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Publisher"
+
+  /publishers/{id}:
+    get:
+      summary: Einzelnen Verlag abrufen
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Verlag gefunden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Publisher"
+        "404":
+          description: Verlag nicht gefunden
+
+    patch:
+      summary: Verlag ändern
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublisherPatch"
+      responses:
+        "200":
+          description: Verlag aktualisiert
+
+    delete:
+      summary: Verlag löschen
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Verlag gelöscht
+        "404":
+          description: Verlag nicht gefunden
+
+# -----------------------------------------------------
+# SCHEMAS
+# -----------------------------------------------------
+components:
+  schemas:
+    Book:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        author:
+          type: string
+        publisher:
+          type: string
+
+    BookCreate:
+      type: object
+      properties:
+        title:
+          type: string
+        author:
+          type: string
+        publisher:
+          type: string
+      required: [title, author, publisher]
+
+    BookPatch:
+      type: object
+      properties:
+        title:
+          type: string
+        author:
+          type: string
+        publisher:
+          type: string
+      additionalProperties: false
+
+    Author:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    AuthorCreate:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
+
+    AuthorPatch:
+      type: object
+      properties:
+        name:
+          type: string
+
+    Publisher:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    PublisherCreate:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
+
+    PublisherPatch:
+      type: object
+      properties:
+        name:
+          type: string

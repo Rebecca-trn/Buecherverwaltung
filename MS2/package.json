@@ -1,0 +1,12 @@
+{
+  "name": "ms2",
+  "version": "1.0.0",
+  "description": "Microservice 2 - MQTT Listener",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "mqtt": "^4.3.7"
+  }
+}
