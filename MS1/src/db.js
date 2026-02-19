@@ -140,6 +140,26 @@ const db = new sqlite3.Database(dbPath, (err) => {
         if (!e) logger.info("books-Spalten:", list.map(c => c.name).join(", "));
       });
     }
+  db.all("PRAGMA table_info(authors);", (eA, colsA) => {
+  if (!eA) {
+    const names = colsA.map(c => c.name);
+    if (!names.includes("birth_year")) {
+      db.run("ALTER TABLE authors ADD COLUMN birth_year INTEGER", err =>
+        err && logger.warn("Spalte authors.birth_year nicht hinzugefügt:", err.message)
+      );
+    }
+  }
+});
+db.all("PRAGMA table_info(publishers);", (e, cols) => {
+  if (!e) {
+    const names = cols.map(c => c.name);
+    if (!names.includes("city")) {
+      db.run("ALTER TABLE publishers ADD COLUMN city TEXT", err =>
+        err && logger.warn("Spalte publishers.city nicht hinzugefügt:", err.message)
+      );
+    }
+  }
+});
 
     function seedIfEmpty() {
       db.get("SELECT COUNT(*) AS c FROM authors", (e, r) => {
