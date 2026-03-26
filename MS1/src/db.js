@@ -43,7 +43,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
         publisher_id INTEGER NOT NULL,
         isbn TEXT NOT NULL UNIQUE,
         year INTEGER NOT NULL,
-        check ( year between 1000 and 9999 and year <= CAST(strftime('%Y', 'now') AS INTEGER )),
+        check ( year between 1000 and 9999 ),
         UNIQUE(title, publisher_id),
         FOREIGN KEY (author_id)    REFERENCES authors(id)    ON UPDATE CASCADE ON DELETE RESTRICT,
         FOREIGN KEY (publisher_id) REFERENCES publishers(id) ON UPDATE CASCADE ON DELETE RESTRICT
