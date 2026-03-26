@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 
-// GET /publishers (mit optionaler Suche ?q=)
+// get publishers
 router.get("/", (req, res) => {
   const { sendError } = req.app.locals;
   const q = (req.query.q || "").trim();
@@ -33,9 +33,10 @@ router.get("/", (req, res) => {
   }
 });
 
-// GET /publishers/:id
+//get publisher by id
 router.get("/:id", (req, res) => {
   const { sendError } = req.app.locals;
+
 
   db.get(
     "SELECT id, name, city FROM publishers WHERE id = ?",
@@ -48,10 +49,11 @@ router.get("/:id", (req, res) => {
   );
 });
 
-// POST /publishers
+// post publisher
 router.post("/", (req, res) => {
   const { sendError, publishEvent } = req.app.locals;
   const { name, city } = req.body;
+
 
   if (!name) return sendError(res, 400, "name fehlt");
 
@@ -66,7 +68,7 @@ router.post("/", (req, res) => {
         [this.lastID],
         (err2, row) => {
           if (err2) return sendError(res, 500, err2.message);
-          // EVENT: created
+  
           publishEvent("publishers", row.id, "created");
           res.status(201).json(row);
         }
@@ -75,7 +77,7 @@ router.post("/", (req, res) => {
   );
 });
 
-// PATCH /publishers/:id
+// Patch publisher by id
 router.patch("/:id", (req, res) => {
   const { sendError, publishEvent } = req.app.locals;
   const { name, city } = req.body;
@@ -111,7 +113,7 @@ router.patch("/:id", (req, res) => {
         [req.params.id],
         (err2, row) => {
           if (err2) return sendError(res, 500, err2.message);
-          // EVENT: updated
+     
           publishEvent("publishers", row.id, "updated");
           res.json(row);
         }
@@ -120,7 +122,7 @@ router.patch("/:id", (req, res) => {
   );
 });
 
-// DELETE /publishers/:id
+// delete publisher by id
 router.delete("/:id", (req, res) => {
   const { sendError, publishEvent } = req.app.locals;
 
@@ -137,8 +139,8 @@ router.delete("/:id", (req, res) => {
     }
     if (this.changes === 0) return sendError(res, 404, "Verlag nicht gefunden");
 
-    // EVENT: deleted
-    publishEvent("publishers", Number(req.params.id), "deleted");
+      publishEvent("publishers", Number(req.params.id), "deleted");
+
     res.status(204).send();
   });
 });

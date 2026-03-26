@@ -1,24 +1,28 @@
-version: "3"
+version: "3.9"
 
 services:
-  broker:
-    image: eclipse-mosquitto
+  mqtt-broker:
+    image: emqx/emqx:latest
+    container_name: mqtt-broker
     ports:
-      - "1883:1883"
+      - "1883:1883"     
+      - "8083:8083"   
+      - "18083:18083"   
+    restart: always
 
   ms1:
     build: ./MS1
-    ports:
-      - "3000:3000"
-      - "8080:8080"
-    environment:
-      - MQTT_URL=mqtt://broker:1883
+    container_name: ms1
     depends_on:
-      - broker
+      - mqtt-broker
+    ports:
+      - "8000:8000"  
+      - "8080:8080"   
+    restart: always
 
   ms2:
     build: ./MS2
-    environment:
-      - MQTT_URL=mqtt://broker:1883
+    container_name: ms2
     depends_on:
-      - broker
+      - mqtt-broker
+    restart: always

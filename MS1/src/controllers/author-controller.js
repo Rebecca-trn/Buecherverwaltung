@@ -2,10 +2,11 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 
-// GET /authors (mit optionaler Suche ?q=)
+// get authors
 router.get("/", (req, res) => {
   const { sendError } = req.app.locals;
   const q = (req.query.q || "").trim();
+
 
   if (!q) {
     db.all("SELECT id, name FROM authors ORDER BY id", [], (err, rows) => {
@@ -25,9 +26,10 @@ router.get("/", (req, res) => {
   }
 });
 
-// GET /authors/:id
+// get author by id
 router.get("/:id", (req, res) => {
   const { sendError } = req.app.locals;
+
 
   db.get(
     "SELECT id, name FROM authors WHERE id = ?",
@@ -40,11 +42,12 @@ router.get("/:id", (req, res) => {
   );
 });
 
-// POST /authors
+// post author
 router.post("/", (req, res) => {
   const { sendError, publishEvent } = req.app.locals;
   const { name } = req.body;
   if (!name) return sendError(res, 400, "name fehlt");
+
 
   db.run("INSERT INTO authors (name) VALUES (?)", [name], function (err) {
     if (err) return sendError(res, 500, err.message);
@@ -54,7 +57,7 @@ router.post("/", (req, res) => {
       [this.lastID],
       (err2, row) => {
         if (err2) return sendError(res, 500, err2.message);
-        // EVENT: created
+ 
         publishEvent("authors", row.id, "created");
         res.status(201).json(row);
       }
@@ -62,34 +65,77 @@ router.post("/", (req, res) => {
   });
 });
 
-// PATCH /authors/:id
+// Patch author by id
 router.patch("/:id", (req, res) => {
   const { sendError, publishEvent } = req.app.locals;
-  const { name } = req.body;
-  if (!name) return sendError(res, 400, "name fehlt");
+  const { name, birth_year } = req.body; 
 
-  db.run(
-    "UPDATE authors SET name = ? WHERE id = ?",
-    [name, req.params.id],
-    function (err) {
-      if (err) return sendError(res, 500, err.message);
-      if (this.changes === 0) return sendError(res, 404, "Autor nicht gefunden");
+  if (name === undefined && birth_year === undefined) {
+    return sendError(res, 400, "keine gültigen Felder (name, birth_year)");
+  }
 
-      db.get(
-        "SELECT id, name FROM authors WHERE id = ?",
-        [req.params.id],
-        (err2, row) => {
-          if (err2) return sendError(res, 500, err2.message);
-          // EVENT: updated
-          publishEvent("authors", row.id, "updated");
-          res.json(row);
-        }
-      );
+  const sets = [];
+  const params = [];
+
+
+  if (name !== undefined) {
+    if (typeof name !== "string" || name.trim() === "") {
+      return sendError(res, 400, "name darf nicht leer sein");
     }
-  );
+    const normalizedName = name.trim();
+    sets.push("name = ?");
+    params.push(normalizedName);
+  }
+
+
+  if (birth_year !== undefined) {
+    let normalizedYear = birth_year;
+
+
+    if (normalizedYear === "" || normalizedYear === null) {
+      normalizedYear = null;
+    } else {
+      const currentYear = new Date().getFullYear();
+      const y = Number(normalizedYear);
+      if (!Number.isInteger(y) || y < 1500 || y > currentYear) {
+        return sendError(res, 400, `birth_year muss eine Ganzzahl zwischen 1500 und ${currentYear} sein`);
+      }
+      normalizedYear = y;
+    }
+
+    sets.push("birth_year = ?");
+    params.push(normalizedYear);
+  }
+
+
+  if (sets.length === 0) {
+    return sendError(res, 400, "keine gültigen Felder (name, birth_year)");
+  }
+
+  params.push(req.params.id);
+
+  
+  db.run(`UPDATE authors SET ${sets.join(", ")} WHERE id = ?`, params, function (err) {
+    if (err) {
+
+      const msg = String(err.message || "");
+      if (msg.includes("UNIQUE") && msg.toLowerCase().includes("name")) {
+        return sendError(res, 409, "Autorenname existiert bereits");
+      }
+      return sendError(res, 500, err.message);
+    }
+    if (this.changes === 0) return sendError(res, 404, "Autor nicht gefunden");
+
+    db.get("SELECT id, name, birth_year FROM authors WHERE id = ?", [req.params.id], (err2, row) => {
+      if (err2) return sendError(res, 500, err2.message);
+      publishEvent("authors", row.id, "updated");
+      res.json(row);
+    });
+  });
 });
 
-// DELETE /authors/:id
+
+// delete author by id
 router.delete("/:id", (req, res) => {
   const { sendError, publishEvent } = req.app.locals;
 

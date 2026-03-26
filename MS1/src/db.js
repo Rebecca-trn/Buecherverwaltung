@@ -15,12 +15,12 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
   logger.info("Connected to SQLite database");
   db.run("PRAGMA foreign_keys = ON;");
-
+  db.run("PRAGMA journal_mode = WAL;");   
+  db.run("PRAGMA synchronous = NORMAL;"); 
+  db.run("PRAGMA busy_timeout = 5000;");  
   db.serialize(() => {
 
-    /* ======================================================
-       Tabellen erzeugen
-       ====================================================== */
+// Tabellen anlegen
     db.run(`
       CREATE TABLE IF NOT EXISTS authors (
         id   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,44 +41,95 @@ const db = new sqlite3.Database(dbPath, (err) => {
         title        TEXT    NOT NULL,
         author_id    INTEGER NOT NULL,
         publisher_id INTEGER NOT NULL,
+        isbn TEXT NOT NULL UNIQUE,
+        year INTEGER NOT NULL,
+        check ( year between 1000 and 9999 and year <= CAST(strftime('%Y', 'now') AS INTEGER )),
         UNIQUE(title, publisher_id),
         FOREIGN KEY (author_id)    REFERENCES authors(id)    ON UPDATE CASCADE ON DELETE RESTRICT,
         FOREIGN KEY (publisher_id) REFERENCES publishers(id) ON UPDATE CASCADE ON DELETE RESTRICT
       )
     `);
+// schema anpassen
 
-    /* ======================================================
-       Schema prüfen & Migration wenn nötig
-       ====================================================== */
-    db.all("PRAGMA table_info(books);", (e, cols) => {
-      if (e) {
-        logger.error(`PRAGMA table_info Fehler: ${e.message}`);
-        return;
+db.all("PRAGMA table_info(books);", (e, cols) => {
+  if (e) {
+    logger.error(`PRAGMA table_info Fehler: ${e.message}`);
+    return;
+  }
+
+  const colNames = cols.map(c => c.name);
+  const looksOld = colNames.includes("author") || colNames.includes("publisher");
+
+ 
+  const missingIsbn = !colNames.includes("isbn");
+  const missingYear = !colNames.includes("year");
+
+  if (missingIsbn || missingYear) {
+    logger.warn("books: isbn/year fehlen – füge Spalten via ALTER TABLE hinzu …");
+
+    if (missingIsbn) {
+      db.run(`ALTER TABLE books ADD COLUMN isbn TEXT`, (err) => {
+        if (err) logger.error("ALTER TABLE add isbn fehlgeschlagen:", err.message);
+        else logger.info("Spalte isbn hinzugefügt.");
+      });
+    }
+
+    if (missingYear) {
+      db.run(`ALTER TABLE books ADD COLUMN year INTEGER`, (err) => {
+        if (err) logger.error("ALTER TABLE add year fehlgeschlagen:", err.message);
+        else logger.info("Spalte year hinzugefügt.");
+      });
+    }
+
+
+    db.run(
+      `UPDATE books
+         SET isbn = 'TEMP-' || id
+       WHERE isbn IS NULL OR TRIM(COALESCE(isbn,'')) = ''`,
+      (err) => {
+        if (err) logger.error("isbn Defaults setzen fehlgeschlagen:", err.message);
       }
+    );
+    db.run(
+      `UPDATE books
+     SET year = MIN(
+       MAX(CAST(year AS INTEGER), 1000),
+       CAST(strftime('%Y','now') AS INTEGER)
+     )
+   WHERE year IS NULL
+      OR CAST(year AS INTEGER) < 1000
+      OR CAST(year AS INTEGER) > CAST(strftime('%Y','now') AS INTEGER)
+`, (e3) => { 
+  if (e3) return rollback("year normalisieren", e3);
+ });
 
-      const colNames = cols.map(c => c.name);
-      const looksOld =
-        colNames.includes("author") || colNames.includes("publisher");
-
-      if (looksOld && (!colNames.includes("author_id") || !colNames.includes("publisher_id"))) {
-        logger.warn("Altes books-Schema erkannt. Starte Migration...");
-
-        migrateOldSchema(() => {
-          logColumns();
-          seedIfEmpty();
-          ensureDemoData();     // <-- WICHTIG: fehlende Daten ergänzen
-        });
-
-      } else {
-        logColumns();
-        seedIfEmpty();
-        ensureDemoData();       // <-- WICHTIG: fehlende Daten ergänzen
+    db.run(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_books_isbn ON books(isbn)`,
+      (err) => {
+        if (err) logger.error("Index auf isbn erstellen fehlgeschlagen:", err.message);
       }
+    );
+  }
+
+  
+  if (looksOld && (!colNames.includes("author_id") || !colNames.includes("publisher_id"))) {
+    logger.warn("Altes books-Schema erkannt. Starte Migration...");
+
+    migrateOldSchema(() => {
+      logColumns();
+      seedIfEmpty();
+      ensureDemoData();
     });
 
-    /* ======================================================
-       Migration alter Struktur
-       ====================================================== */
+  } else {
+    logColumns();
+    seedIfEmpty();
+    ensureDemoData();
+  }
+});
+
+// Migration von altem Schema zu neuem Schema
+
     function migrateOldSchema(callback) {
       db.exec("BEGIN TRANSACTION;", (e1) => {
         if (e1) {
@@ -104,6 +155,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 title        TEXT    NOT NULL,
                 author_id    INTEGER NOT NULL,
                 publisher_id INTEGER NOT NULL,
+                isbn TEXT NOT NULL UNIQUE,
+                year INTEGER NOT NULL,
+                check ( year between 1000 and 9999 and year <= CAST(strftime('%Y', 'now') AS INTEGER )),
                 UNIQUE(title, publisher_id),
                 FOREIGN KEY (author_id)    REFERENCES authors(id)    ON UPDATE CASCADE ON DELETE RESTRICT,
                 FOREIGN KEY (publisher_id) REFERENCES publishers(id) ON UPDATE CASCADE ON DELETE RESTRICT
@@ -112,14 +166,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
               if (e4) return rollback("books_new anlegen", e4);
 
               db.run(`
-                INSERT INTO books_new (id, title, author_id, publisher_id)
+                INSERT INTO books_new (id, title, author_id, publisher_id, isbn, year)
                 SELECT  b.id,
                         b.title,
                         a.id AS author_id,
-                        p.id AS publisher_id
+                        p.id AS publisher_id,
+                        b.isbn,
+                        b.year
                 FROM books b
                 LEFT JOIN authors   a ON a.name = b.author
                 LEFT JOIN publishers p ON p.name = b.publisher
+                WHERE b.isbn IS NOT NULL AND b.year IS NOT NULL
               `, (e5) => {
                 if (e5) return rollback("Daten migrieren", e5);
 
@@ -145,7 +202,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
           });
         });
       });
-    }
+    };
+
 
     function rollback(step, err) {
       logger.info(`Migration Fehler bei "${step}":`, err.message);
@@ -154,18 +212,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
       );
     }
 
-    /* ======================================================
-       Log Hilfsfunktion
-       ====================================================== */
+// Hilfsfunktionen
+
     function logColumns() {
       db.all("PRAGMA table_info(books);", (e, list) => {
         if (!e) logger.info("books-Spalten:", list.map(c => c.name).join(", "));
       });
     }
 
-    /* ======================================================
-       Seed wenn leer (dein Original)
-       ====================================================== */
+
     function seedIfEmpty() {
       db.get("SELECT COUNT(*) AS c FROM authors", (e, r) => {
         if (!e && r && r.c === 0) {
@@ -192,16 +247,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
               const findId = (arr, name) => (arr.find(x => x.name === name) || {}).id;
 
               const rows = [
-                { title: "Clean Code",           author: "Robert C. Martin", publisher: "Prentice Hall" },
-                { title: "You Don't Know JS",    author: "Kyle Simpson",      publisher: "O'Reilly" },
-                { title: "Eloquent JavaScript",  author: "Marijn Haverbeke",  publisher: "No Starch Press" }
+                { title: "Clean Code",           author: "Robert C. Martin", publisher: "Prentice Hall", isbn: "978-3-8266-5548-7", year: 2009},
+                { title: "Wenn Sie wüsste",    author: "Freida McFadden",      publisher: "Heyne", isbn: "978-3-453-47190-0", year: 2023},
+                { title: "The Defender",  author: "Ana Huang",  publisher: "Lyx", isbn: "978-3-7363-2571-5", year: 2026}
               ];
 
-              const ins = db.prepare("INSERT INTO books (title, author_id, publisher_id) VALUES (?,?,?)");
+              const ins = db.prepare("INSERT INTO books (title, author_id, publisher_id, isbn, year) VALUES (?,?,?,?,?)");
               rows.forEach(rw => {
                 const aid = findId(aa, rw.author);
                 const pid = findId(pp, rw.publisher);
-                if (aid && pid) ins.run(rw.title, aid, pid);
+                if (aid && pid) ins.run(rw.title, aid, pid, rw.isbn, rw.year);
               });
               ins.finalize();
             });
@@ -210,18 +265,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
       });
     }
 
-    /* ======================================================
-       ALWAYS ENSURE 3 Bücher / 3 Autoren / 3 Publisher
-       ====================================================== */
+
     function ensureDemoData() {
       // Autoren ergänzen
       const insertAuthor = db.prepare("INSERT OR IGNORE INTO authors (name) VALUES (?)");
-      ["Robert C. Martin", "Kyle Simpson", "Marijn Haverbeke"].forEach(n => insertAuthor.run(n));
+      ["Robert C. Martin", "Freida McFadden", "Ana Huang"].forEach(n => insertAuthor.run(n));
       insertAuthor.finalize();
 
-      // Publisher ergänzen
+
+    // Verlage ergänzen 
       const insertPublisher = db.prepare("INSERT OR IGNORE INTO publishers (name) VALUES (?)");
-      ["Prentice Hall", "O'Reilly", "No Starch Press"].forEach(n => insertPublisher.run(n));
+      ["Prentice Hall", "Heyne", "Lyx"].forEach(n => insertPublisher.run(n));
       insertPublisher.finalize();
 
       db.all("SELECT id, name FROM authors", (e1, aa) => {
@@ -231,19 +285,19 @@ const db = new sqlite3.Database(dbPath, (err) => {
           const findId = (arr, name) => (arr.find(x => x.name === name) || {}).id;
 
           const rows = [
-            { title: "Clean Code",           author: "Robert C. Martin", publisher: "Prentice Hall" },
-            { title: "You Don't Know JS",    author: "Kyle Simpson",      publisher: "O'Reilly" },
-            { title: "Eloquent JavaScript",  author: "Marijn Haverbeke",  publisher: "No Starch Press" }
+            { title: "Clean Code",           author: "Robert C. Martin", publisher: "Prentice Hall", isbn: "978-3-8266-5548-7", year: 2009},
+            { title: "Wenn Sie wüsste",    author: "Freida McFadden",      publisher: "Heyne", isbn: "978-3-453-47190-0", year: 2023},
+            { title: "The Defender",  author: "Ana Huang",  publisher: "Lyx", isbn: "978-3-7363-2571-5", year: 2026}
           ];
 
           const insertBook = db.prepare(`
-            INSERT OR IGNORE INTO books (title, author_id, publisher_id) VALUES (?,?,?)
+            INSERT OR IGNORE INTO books (title, author_id, publisher_id, isbn, year) VALUES (?,?,?,?,?)
           `);
 
           rows.forEach(rw => {
             const aid = findId(aa, rw.author);
             const pid = findId(pp, rw.publisher);
-            if (aid && pid) insertBook.run(rw.title, aid, pid);
+            if (aid && pid) insertBook.run(rw.title, aid, pid, rw.isbn, rw.year);
           });
           insertBook.finalize();
         });
@@ -254,4 +308,3 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 module.exports = db;
-

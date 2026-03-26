@@ -10,9 +10,8 @@ const logger = createLogger("ms1");
 const app = express();
 app.use(express.json());
 
-// --------------------------------------
-// CORS
-// --------------------------------------
+// CORS 
+
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
@@ -21,9 +20,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// --------------------------------------
-// Hilfsfunktionen DEFINIEREN
-// --------------------------------------
+// Hilfsfunktionen
+
 function getOrCreateIdByName(table, name, cb) {
   if (!name) return cb(new Error("name required"));
   db.get(`SELECT id FROM ${table} WHERE name = ?`, [name], (e, row) => {
@@ -47,31 +45,26 @@ function publishEvent(resource, id, change) {
   if (mqttClient && mqttClient.connected) mqttClient.publish("ms1/events", msg);
 }
 
-// --------------------------------------
-// Hilfsfunktionen
-// --------------------------------------
+
 app.locals.getOrCreateIdByName = getOrCreateIdByName;
 app.locals.sendError = sendError;
 app.locals.publishEvent = publishEvent;
 
-// --------------------------------------
-// Controller laden 
-// --------------------------------------
+// Controller laden
+
 const authorController = require("./controllers/author-controller");
 const publisherController = require("./controllers/publisher-controller");
 const bookController = require("./controllers/book-controller");
 
-// --------------------------------------
-// Routes registrieren
-// --------------------------------------
+// Routen
+
 app.use("/authors", authorController);
 app.use("/publishers", publisherController);
 app.use("/books", bookController);
 
-// --------------------------------------
-// MQTT + Swagger
-// --------------------------------------
-const MQTT_URL = process.env.MQTT_URL || "mqtt://localhost:1883";
+//mqtt client
+
+const MQTT_URL = process.env.MQTT_URL || "mqtt://mqtt-broker:1883";
 let mqttClient = mqtt.connect(MQTT_URL);
 
 let openapiSpec = yaml.load(path.join(__dirname, "..", "openapi.yaml"));
@@ -83,7 +76,6 @@ docsApp.listen(8080, () => {
 });
 
 
-// --------------------------------------
 // Server starten
-// --------------------------------------
-app.listen(3000, () => logger.info("API läuft auf http://localhost:3000"));
+
+app.listen(8000, () => logger.info("API läuft auf http://localhost:8000"));
