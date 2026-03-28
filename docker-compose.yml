@@ -1,28 +1,37 @@
-
+version: "3.8"
 
 services:
   mqtt-broker:
     image: emqx/emqx:latest
     container_name: mqtt-broker
     ports:
-      - "1880:1880"     
-      - "8080:8080"   
-      - "18080:18080"   
+      - "1880:1880"
+      # EMQX-Dashboard is accessible on 18080 (mapped from 18083 intern)
+      - "18080:18080"
+      # avoid 8080 conflict with MS1 swagger endpoint
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18083/status -o /dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
 
   ms1:
     build: ./MS1
     container_name: ms1
     depends_on:
-      - mqtt-broker
+      mqtt-broker:
+        condition: service_healthy
     ports:
-      - "8000:8000"  
-      - "8080:8080"   
+      - "8000:8000"
+      - "8080:8080"
     restart: always
 
   ms2:
     build: ./MS2
     container_name: ms2
     depends_on:
-      - mqtt-broker
+      mqtt-broker:
+        condition: service_healthy
     restart: always

@@ -4,8 +4,9 @@ const db = require("../db");
 
 // Get books 
 router.get("/", (req, res) => {
-  const sendError = req.app.locals.sendError;
+  const { sendError, logger } = req.app.locals;
   const q = (req.query.q || "").trim();
+  logger.debug(`[book-controller] GET / q=${q}`);
 
   const baseSql = `
     SELECT b.id, b.title,
@@ -20,7 +21,11 @@ router.get("/", (req, res) => {
 
   if (!q) {
     db.all(baseSql + " ORDER BY b.id", [], (err, rows) => {
-      if (err) return sendError(res, 500, err.message);
+      if (err) {
+        logger.error(`[book-controller] GET / query failed: ${err.message}`);
+        return sendError(res, 500, err.message);
+      }
+      logger.debug(`[book-controller] GET / returned ${rows.length} rows`);
       res.json(rows);
     });
   } else {
@@ -34,7 +39,11 @@ router.get("/", (req, res) => {
       `,
       [like, like, like],
       (err, rows) => {
-        if (err) return sendError(res, 500, err.message);
+        if (err) {
+          logger.error(`[book-controller] GET / q=${q} failed: ${err.message}`);
+          return sendError(res, 500, err.message);
+        }
+        logger.debug(`[book-controller] GET / q=${q} returned ${rows.length} rows`);
         res.json(rows);
       }
     );
@@ -43,7 +52,9 @@ router.get("/", (req, res) => {
 
 //Get book by id
 router.get("/:id", (req, res) => {
-  const sendError = req.app.locals.sendError;
+  const { sendError, logger } = req.app.locals;
+  const { id } = req.params;
+  logger.debug(`[book-controller] GET /${id}`);
 
   db.get(
     `
@@ -59,8 +70,15 @@ router.get("/:id", (req, res) => {
     `,
     [req.params.id],
     (err, row) => {
-      if (err) return sendError(res, 500, err.message);
-      if (!row) return sendError(res, 404, "Buch nicht gefunden");
+      if (err) {
+        logger.error(`[book-controller] GET /${id} failed: ${err.message}`);
+        return sendError(res, 500, err.message);
+      }
+      if (!row) {
+        logger.warn(`[book-controller] GET /${id} not found`);
+        return sendError(res, 404, "Buch nicht gefunden");
+      }
+      logger.info(`[book-controller] GET /${id} success`);
       res.json(row);
     }
   );
@@ -68,12 +86,11 @@ router.get("/:id", (req, res) => {
 
 // post books
 router.post("/", (req, res) => {
-  const sendError = req.app.locals.sendError;
-  const publishEvent = req.app.locals.publishEvent;
-  const getOrCreateIdByName = req.app.locals.getOrCreateIdByName;
-
+  const { sendError, publishEvent, getOrCreateIdByName, logger } = req.app.locals;
   const { title, author, publisher, isbn, year } = req.body;
+  logger.debug(`[book-controller] POST / body=${JSON.stringify(req.body)}`);
   if (!title || !author || !publisher || !isbn || year == null) {
+    logger.warn("[book-controller] POST / missing required fields");
     return sendError(res, 400, "title, author, publisher, isbn und year sind Pflichtfelder");
   }
 
@@ -93,13 +110,13 @@ router.post("/", (req, res) => {
         "INSERT INTO books (title, author_id, publisher_id, isbn, year) VALUES (?,?,?,?,?)",
         [title, author_id, publisher_id, isbn, year ],
         function (err) {
-          
           if (err) {
-  if (String(err.message).includes("UNIQUE") && String(err.message).includes("isbn")) {
-    return sendError(res, 409, "ISBN existiert bereits");
-  }
-  return sendError(res, 500, err.message);
-}
+            logger.error(`[book-controller] POST / insert failed: ${err.message}`);
+            if (String(err.message).includes("UNIQUE") && String(err.message).includes("isbn")) {
+              return sendError(res, 409, "ISBN existiert bereits");
+            }
+            return sendError(res, 500, err.message);
+          }
           db.get(
             `SELECT b.id, b.title, a.name AS author, p.name AS publisher, b.isbn, b.year
              FROM books b
@@ -108,9 +125,13 @@ router.post("/", (req, res) => {
              WHERE b.id = ?`,
             [this.lastID],
             (err2, row) => {
-              if (err2) return sendError(res, 500, err2.message);
+              if (err2) {
+                logger.error(`[book-controller] POST / select inserted book failed: ${err2.message}`);
+                return sendError(res, 500, err2.message);
+              }
 
               publishEvent("books", row.id, "created");
+              logger.info(`[book-controller] POST / created book ${row.id}`);
               res.status(201).json(row);
             }
           );
@@ -122,17 +143,19 @@ router.post("/", (req, res) => {
 
 //patch book by id
 router.patch("/:id", (req, res) => {
-  const sendError = req.app.locals.sendError;
-  const publishEvent = req.app.locals.publishEvent;
-  const getOrCreateIdByName = req.app.locals.getOrCreateIdByName;
+  const { sendError, publishEvent, getOrCreateIdByName, logger } = req.app.locals;
+  const { id } = req.params;
+  logger.debug(`[book-controller] PATCH /${id} body=${JSON.stringify(req.body)}`);
 
   const allowed = ["title", "author", "publisher", "isbn", "year"];
   const body = {};
   for (const k of allowed)
     if (Object.prototype.hasOwnProperty.call(req.body, k)) body[k] = req.body[k];
 
-  if (Object.keys(body).length === 0)
+  if (Object.keys(body).length === 0) {
+    logger.warn(`[book-controller] PATCH /${id} no valid fields`);
     return sendError(res, 400, "Keine gültigen Felder zum Aktualisieren");
+  }
 
   const out = { title: body.title };
   if (Object.prototype.hasOwnProperty.call(body, "isbn")) out.isbn = body.isbn;
@@ -151,15 +174,17 @@ router.patch("/:id", (req, res) => {
     params.push(req.params.id);
 
     db.run(`UPDATE books SET ${sets.join(", ")} WHERE id = ?`, params, function (err) {
-      
       if (err) {
-  if (String(err.message).includes("UNIQUE") && String(err.message).includes("isbn")) {
-    return sendError(res, 409, "ISBN existiert bereits");
-  }
-  return sendError(res, 500, err.message);
-}
-     if (this.changes === 0) return sendError(res, 404, "Buch nicht gefunden");
-
+        logger.error(`[book-controller] PATCH /${id} update failed: ${err.message}`);
+        if (String(err.message).includes("UNIQUE") && String(err.message).includes("isbn")) {
+          return sendError(res, 409, "ISBN existiert bereits");
+        }
+        return sendError(res, 500, err.message);
+      }
+      if (this.changes === 0) {
+        logger.warn(`[book-controller] PATCH /${id} not found`);
+        return sendError(res, 404, "Buch nicht gefunden");
+      }
       db.get(
         `SELECT b.id, b.title, a.name AS author, p.name AS publisher, b.isbn, b.year  
          FROM books b
@@ -168,9 +193,13 @@ router.patch("/:id", (req, res) => {
          WHERE b.id = ?`,
         [req.params.id],
         (err2, row) => {
-          if (err2) return sendError(res, 500, err2.message);
+          if (err2) {
+            logger.error(`[book-controller] PATCH /${id} select failed: ${err2.message}`);
+            return sendError(res, 500, err2.message);
+          }
 
           publishEvent("books", row.id, "updated");
+          logger.info(`[book-controller] PATCH /${id} success`);
           res.json(row);
         }
       );
@@ -197,14 +226,22 @@ router.patch("/:id", (req, res) => {
 
 // delete book by id
 router.delete("/:id", (req, res) => {
-  const sendError = req.app.locals.sendError;
-  const publishEvent = req.app.locals.publishEvent;
+  const { sendError, publishEvent, logger } = req.app.locals;
+  const { id } = req.params;
+  logger.debug(`[book-controller] DELETE /${id}`);
 
-  db.run("DELETE FROM books WHERE id = ?", [req.params.id], function (err) {
-    if (err) return sendError(res, 500, err.message);
-    if (this.changes === 0) return sendError(res, 404, "Buch nicht gefunden");
+  db.run("DELETE FROM books WHERE id = ?", [id], function (err) {
+    if (err) {
+      logger.error(`[book-controller] DELETE /${id} failed: ${err.message}`);
+      return sendError(res, 500, err.message);
+    }
+    if (this.changes === 0) {
+      logger.warn(`[book-controller] DELETE /${id} not found`);
+      return sendError(res, 404, "Buch nicht gefunden");
+    }
 
-    publishEvent("books", Number(req.params.id), "deleted");
+    publishEvent("books", Number(id), "deleted");
+    logger.info(`[book-controller] DELETE /${id} deleted`);
     res.status(204).send();
   });
 });

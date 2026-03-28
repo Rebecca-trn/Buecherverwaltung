@@ -6,9 +6,23 @@ const db = require("./db");
 const mqtt = require("mqtt");
 const createLogger = require("./logging");
 const logger = createLogger("ms1");
+logger.setLevel("debug");
 
 const app = express();
+app.use((req, res, next) => {
+  logger.info(`HTTP ${req.method} ${req.originalUrl} -- start`);
+  logger.debug(`Headers: ${JSON.stringify(req.headers)}`);
+  if (req.method !== "GET") {
+    logger.debug(`Body: ${JSON.stringify(req.body)}`);
+  }
+  res.on("finish", () => {
+    logger.info(`HTTP ${req.method} ${req.originalUrl} -- done (${res.statusCode})`);
+  });
+  next();
+});
 app.use(express.json());
+
+app.locals.logger = logger;
 
 // CORS 
 
