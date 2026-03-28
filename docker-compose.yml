@@ -5,9 +5,9 @@ services:
     image: emqx/emqx:latest
     container_name: mqtt-broker
     ports:
-      - "1883:1883"     
-      - "8083:8083"   
-      - "18083:18083"   
+      - "1880:1880"     
+      - "8080:8080"   
+      - "18080:18080"   
     restart: always
 
   ms1:
