@@ -2,3 +2,5 @@ MS1/node_modules/
 MS2/node_modules/
 node_modules
 node-v24.13.1-win-x64
+MS1/books.db-shm
+MS1/books.db-wal
