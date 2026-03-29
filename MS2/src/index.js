@@ -1,13 +1,14 @@
 const net = require("net");
 const mqtt = require("mqtt");
 
-const MQTT_HOST = process.env.MQTT_HOST || "mqtt-broker";
+const MQTT_HOST = process.env.MQTT_HOST || "127.0.0.1";
 const MQTT_PORT = Number(process.env.MQTT_PORT || 1883);
 const MQTT_URL = `mqtt://${MQTT_HOST}:${MQTT_PORT}`;
 const MQTT_TOPIC = "ms1/events";
 const clientId = "ms2-" + Math.random().toString(16).slice(2);
 
 let client;
+console.log(`[MS2] Welcome at Rebecca's Version of MS2 Module`)
 
 function waitForBroker() {
   return new Promise((resolve) => {

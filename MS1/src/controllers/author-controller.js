@@ -121,7 +121,6 @@ router.patch("/:id", (req, res) => {
   if (birth_year !== undefined) {
     let normalizedYear = birth_year;
 
-
     if (normalizedYear === "" || normalizedYear === null) {
       normalizedYear = null;
     } else {

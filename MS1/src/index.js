@@ -7,6 +7,7 @@ const mqtt = require("mqtt");
 const createLogger = require("./logging");
 const logger = createLogger("ms1");
 logger.setLevel("debug");
+logger.info(`Welcome at Rebecca's Version of MS1 Module`);
 
 const app = express();
 app.use((req, res, next) => {
@@ -57,6 +58,7 @@ function sendError(res, statusCode, msg) {
 function publishEvent(resource, id, change) {
   const msg = JSON.stringify({ resource, id, change, ts: new Date().toISOString() });
   if (mqttClient && mqttClient.connected) mqttClient.publish("ms1/events", msg);
+  else logger.warn("MQTT-Client nicht verbunden, Event nicht gesendet:", msg);
 }
 
 
@@ -78,8 +80,9 @@ app.use("/books", bookController);
 
 //mqtt client
 
-const MQTT_URL = process.env.MQTT_URL || "mqtt://mqtt-broker:1883";
+const MQTT_URL = process.env.MQTT_URL || "mqtt://127.0.0.1:1883";
 let mqttClient = mqtt.connect(MQTT_URL);
+mqttClient.publish("ms1/events", "Rebecca's MQTT-Client ist verbunden und sendet Events!");
 
 let openapiSpec = yaml.load(path.join(__dirname, "..", "openapi.yaml"));
 const docsApp = express();
