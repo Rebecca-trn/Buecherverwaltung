@@ -60,26 +60,49 @@ const db = new sqlite3.Database(dbPath, (err) => {
       }
 
       logger.info("books-Spalten:", cols.map(c => c.name).join(", "));
-      ensureDemoData(); // <<< EINZIGE Demo-Funktion, stabil & korrekt
+      ensureDemoData();
     });
   });
 });
 
 
 function ensureDemoData() {
-
   // Autoren
   const authors = ["Robert C. Martin", "Freida McFadden", "Ana Huang"];
   const insertAuthor = db.prepare("INSERT OR IGNORE INTO authors(name) VALUES (?)");
-  authors.forEach(a => insertAuthor.run(a));
-  insertAuthor.finalize();
+  let authorCount = 0;
 
+  authors.forEach(a => {
+    logger.info("Insert Author:", a);
+    insertAuthor.run(a, () => {
+      authorCount++;
+      if (authorCount === authors.length) {
+        insertAuthor.finalize();
+        insertPublishers();
+      }
+    });
+  });
+}
+
+function insertPublishers() {
   // Verlage
   const publishers = ["Prentice Hall", "Heyne", "Lyx"];
   const insertPub = db.prepare("INSERT OR IGNORE INTO publishers(name) VALUES (?)");
-  publishers.forEach(p => insertPub.run(p));
-  insertPub.finalize();
+  let pubCount = 0;
 
+  publishers.forEach(p => {
+    logger.info("Insert Publisher:", p);
+    insertPub.run(p, () => {
+      pubCount++;
+      if (pubCount === publishers.length) {
+        insertPub.finalize();
+        insertBooks();
+      }
+    });
+  });
+}
+
+function insertBooks() {
   // Bücher
   db.all("SELECT id, name FROM authors", (e1, aa) => {
     db.all("SELECT id, name FROM publishers", (e2, pp) => {
@@ -101,6 +124,7 @@ function ensureDemoData() {
       books.forEach(b => {
         const aid = findId(aa, b.author);
         const pid = findId(pp, b.publisher);
+        logger.info("Insert book:", b.title, "Author ID:", aid, "Publisher ID:", pid);
         if (aid && pid) insertBook.run(b.title, aid, pid, b.isbn, b.year);
       });
 
