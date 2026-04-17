@@ -84,6 +84,10 @@ const MQTT_URL = process.env.MQTT_URL || "mqtt://127.0.0.1:1883";
 let mqttClient = mqtt.connect(MQTT_URL);
 mqttClient.publish("ms1/events", "Rebecca's MQTT-Client ist verbunden und sendet Events!");
 
+db.onReady(() => {
+  db.setPublishEventCallback(publishEvent);
+});
+
 let openapiSpec = yaml.load(path.join(__dirname, "..", "openapi.yaml"));
 const docsApp = express();
 docsApp.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));

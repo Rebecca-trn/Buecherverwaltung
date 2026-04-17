@@ -4,6 +4,7 @@ const createLogger = require("./logging");
 
 const logger = createLogger("db");
 const dbPath = path.join(__dirname, "..", "books.db");
+let publishEventCallback = null;
 
 logger.info("SQLite DB-Datei:", dbPath);
 
@@ -69,15 +70,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
 function ensureDemoData() {
   // Autoren
   const authors = ["Robert C. Martin", "Freida McFadden", "Ana Huang"];
-  const insertAuthor = db.prepare("INSERT OR IGNORE INTO authors(name) VALUES (?)");
   let authorCount = 0;
 
   authors.forEach(a => {
     logger.info("Insert Author:", a);
-    insertAuthor.run(a, () => {
+    db.run("INSERT OR IGNORE INTO authors(name) VALUES (?)", [a], function(err) {
+      if (!err && this.lastID) {
+        if (publishEventCallback) publishEventCallback("authors", this.lastID, "created");
+      }
       authorCount++;
       if (authorCount === authors.length) {
-        insertAuthor.finalize();
         insertPublishers();
       }
     });
@@ -87,15 +89,16 @@ function ensureDemoData() {
 function insertPublishers() {
   // Verlage
   const publishers = ["Prentice Hall", "Heyne", "Lyx"];
-  const insertPub = db.prepare("INSERT OR IGNORE INTO publishers(name) VALUES (?)");
   let pubCount = 0;
 
   publishers.forEach(p => {
     logger.info("Insert Publisher:", p);
-    insertPub.run(p, () => {
+    db.run("INSERT OR IGNORE INTO publishers(name) VALUES (?)", [p], function(err) {
+      if (!err && this.lastID) {
+        if (publishEventCallback) publishEventCallback("publishers", this.lastID, "created");
+      }
       pubCount++;
       if (pubCount === publishers.length) {
-        insertPub.finalize();
         insertBooks();
       }
     });
@@ -116,21 +119,33 @@ function insertBooks() {
         { title: "The Defender",     author: "Ana Huang",        publisher: "Lyx",           isbn: "978-3-7363-2571-5", year: 2026 }
       ];
 
-      const insertBook = db.prepare(`
-        INSERT OR IGNORE INTO books (title, author_id, publisher_id, isbn, year)
-        VALUES (?,?,?,?,?)
-      `);
-
       books.forEach(b => {
         const aid = findId(aa, b.author);
         const pid = findId(pp, b.publisher);
         logger.info("Insert book:", b.title, "Author ID:", aid, "Publisher ID:", pid);
-        if (aid && pid) insertBook.run(b.title, aid, pid, b.isbn, b.year);
+        if (aid && pid) {
+          db.run(
+            "INSERT OR IGNORE INTO books (title, author_id, publisher_id, isbn, year) VALUES (?,?,?,?,?)",
+            [b.title, aid, pid, b.isbn, b.year],
+            function(err) {
+              if (!err && this.lastID && this.changes > 0) {
+                if (publishEventCallback) {
+                  publishEventCallback("books", this.lastID, "created");
+                }
+              }
+            }
+          );
+        }
       });
-
-      insertBook.finalize();
     });
   });
 }
 
 module.exports = db;
+module.exports.onReady = (callback) => {
+  // Rufe den Callback sofort auf (db wird synchron erzeugt)
+  callback();
+};
+module.exports.setPublishEventCallback = (callback) => {
+  publishEventCallback = callback;
+};
