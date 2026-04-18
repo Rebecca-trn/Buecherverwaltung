@@ -6,8 +6,37 @@ const db = require("./db");
 const mqtt = require("mqtt");
 const createLogger = require("./logging");
 const logger = createLogger("ms1");
+const mqttchannel="rebecca-ms1/events";
 logger.setLevel("debug");
 logger.info(`Welcome at Rebecca's Version of MS1 Module`);
+
+// MQTT-Client VOR app-Setup initialisieren
+const MQTT_URL = process.env.MQTT_URL || "wss://mqtt.zimolong.eu/";
+let mqttClient = mqtt.connect(MQTT_URL, {
+  username: process.env.MQTT_USERNAME || "dhbw",
+  password: process.env.MQTT_PASSWORD || "dhbw"
+});
+
+// Warte auf MQTT-Verbindung
+mqttClient.on("connect", () => {
+  logger.info("MQTT-Client verbunden " + MQTT_URL+ " MQTT_USERNAME dhbw ");
+  logger.info("MQTT-channel: " + mqttchannel);
+  db.setMqttReady();
+});
+
+mqttClient.on("error", (err) => {
+  logger.error("MQTT-Fehler:", err.message);
+});
+
+// publishEvent-Funktion definieren
+function publishEvent(resource, id, change) {
+  const msg = JSON.stringify({ resource, id, change, ts: new Date().toISOString() });
+  if (mqttClient && mqttClient.connected) mqttClient.publish(mqttchannel, msg);
+  else logger.warn("MQTT-Client nicht verbunden, Event nicht gesendet:", msg);
+}
+
+// Callback SOFORT nach MQTT-Client registrieren
+db.setPublishEventCallback(publishEvent);
 
 const app = express();
 app.use((req, res, next) => {
@@ -55,12 +84,6 @@ function sendError(res, statusCode, msg) {
   return res.status(statusCode).json({ error: msg });
 }
 
-function publishEvent(resource, id, change) {
-  const msg = JSON.stringify({ resource, id, change, ts: new Date().toISOString() });
-  if (mqttClient && mqttClient.connected) mqttClient.publish("ms1/events", msg);
-  else logger.warn("MQTT-Client nicht verbunden, Event nicht gesendet:", msg);
-}
-
 
 app.locals.getOrCreateIdByName = getOrCreateIdByName;
 app.locals.sendError = sendError;
@@ -78,15 +101,14 @@ app.use("/authors", authorController);
 app.use("/publishers", publisherController);
 app.use("/books", bookController);
 
-//mqtt client
-
-const MQTT_URL = process.env.MQTT_URL || "mqtt://127.0.0.1:1883";
-let mqttClient = mqtt.connect(MQTT_URL);
-mqttClient.publish("ms1/events", "Rebecca's MQTT-Client ist verbunden und sendet Events!");
-
-db.onReady(() => {
-  db.setPublishEventCallback(publishEvent);
-});
+// Verbindungsbestätigung nach Start
+mqttClient.publish(mqttchannel, JSON.stringify({
+  resource: "ms1",
+  id: null,
+  change: "connected",
+  message: "Rebecca's MQTT-Client ist verbunden und sendet Events!",
+  ts: new Date().toISOString()
+}));
 
 let openapiSpec = yaml.load(path.join(__dirname, "..", "openapi.yaml"));
 const docsApp = express();

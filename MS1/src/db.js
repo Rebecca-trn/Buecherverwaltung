@@ -5,6 +5,7 @@ const createLogger = require("./logging");
 const logger = createLogger("db");
 const dbPath = path.join(__dirname, "..", "books.db");
 let publishEventCallback = null;
+let mqttReady = false;
 
 logger.info("SQLite DB-Datei:", dbPath);
 
@@ -61,7 +62,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
       }
 
       logger.info("books-Spalten:", cols.map(c => c.name).join(", "));
-      ensureDemoData();
+      // Warte auf MQTT-Verbindung, bevor Demo-Daten geladen werden
+      if (mqttReady) {
+        ensureDemoData();
+      }
     });
   });
 });
@@ -148,4 +152,13 @@ module.exports.onReady = (callback) => {
 };
 module.exports.setPublishEventCallback = (callback) => {
   publishEventCallback = callback;
+};
+module.exports.setMqttReady = () => {
+  mqttReady = true;
+  // Laden Sie Demo-Daten, wenn DB bereit ist
+  db.all("PRAGMA table_info(books);", (e, cols) => {
+    if (!e && cols && publishEventCallback) {
+      ensureDemoData();
+    }
+  });
 };

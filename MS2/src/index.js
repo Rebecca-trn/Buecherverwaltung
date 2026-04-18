@@ -1,10 +1,8 @@
 const net = require("net");
 const mqtt = require("mqtt");
 
-const MQTT_HOST = process.env.MQTT_HOST || "127.0.0.1";
-const MQTT_PORT = Number(process.env.MQTT_PORT || 1883);
-const MQTT_URL = `mqtt://${MQTT_HOST}:${MQTT_PORT}`;
-const MQTT_TOPIC = "ms1/events";
+const MQTT_URL = process.env.MQTT_URL || "wss://mqtt.zimolong.eu/";
+const MQTT_TOPIC = "rebecca-ms1/events";
 const clientId = "ms2-" + Math.random().toString(16).slice(2);
 
 let client;
@@ -13,15 +11,21 @@ console.log(`[MS2] Welcome at Rebecca's Version of MS2 Module`)
 function waitForBroker() {
   return new Promise((resolve) => {
     const tryConnect = () => {
-      const socket = net.createConnection(MQTT_PORT, MQTT_HOST);
+      const tempClient = mqtt.connect(MQTT_URL, {
+        clientId: "ms2-checker-" + Math.random().toString(16).slice(2),
+        username: process.env.MQTT_USERNAME || "dhbw",
+        password: process.env.MQTT_PASSWORD || "dhbw",
+        reconnectPeriod: 0,
+        connectTimeout: 3000
+      });
 
-      socket.once("connect", () => {
-        socket.destroy();
+      tempClient.once("connect", () => {
+        tempClient.end();
         resolve();
       });
 
-      socket.once("error", () => {
-        socket.destroy();
+      tempClient.once("error", () => {
+        tempClient.end();
         setTimeout(tryConnect, 1000);
       });
     };
@@ -33,6 +37,8 @@ function waitForBroker() {
 function startClient() {
   client = mqtt.connect(MQTT_URL, {
     clientId,
+    username: process.env.MQTT_USERNAME || "dhbw",
+    password: process.env.MQTT_PASSWORD || "dhbw",
     reconnectPeriod: 2000
   });
 
@@ -76,18 +82,23 @@ function startClient() {
 })();
 
 function toNiceText(msg) {
-  const names = { books: "Buch", authors: "Autor", publishers: "Verlag" };
+  const names = { books: "Buch", authors: "Autor", publishers: "Verlag", ms1: "MS1" };
   const res = names[msg.resource] || msg.resource || "Ressource";
 
   const actions = {
     created: "angelegt",
     updated: "aktualisiert",
     deleted: "gelöscht",
+    connected: "verbunden"
   };
   const action = actions[msg.change] || msg.change || "geändert";
 
   const when = msg.ts ? new Date(msg.ts) : new Date();
   const whenStr = when.toLocaleString();
+
+  if (msg.message) {
+    return `[${whenStr}] ${msg.message}`;
+  }
 
   return `[${whenStr}] ${res} #${msg.id} wurde ${action}.`;
 }
